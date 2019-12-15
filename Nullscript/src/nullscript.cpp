@@ -33,7 +33,7 @@ namespace NULLSCR
                 rule -> apply(source);
             }
         }
-        catch (TokenizerException e)
+        catch (TokenizerException& e)
         {
             std::string err = getName();
             err += ": ";
