@@ -49,23 +49,25 @@ namespace NULLSCR
                     {
                         //check mode, determine need to push, push
                         bool insert = true;
-                        WordPoint* v = matches[j] -> value.get();
-
-                        if (i - v->size >= 1 && !WordPoint::checkChar(source[i -1 - v->size],v -> mode))
+                        std::vector<WordPoint>* s = matches[j] -> value.get();
+                        for (auto v:*s)
                         {
-                            insert = false;
-                        }
-                        if (!WordPoint::checkChar(source[i],v -> mode))
-                        {
-                            insert = false;
-                        }
-                        if (insert)
-                        {
-                            ps.emplace_back(    i - v -> size,
-                                                v -> state,
-                                                v -> id,
-                                                v -> size,
-                                                v -> scoped);
+                            if (i - v.size >= 1 && !WordPoint::checkChar(source[i -1 - v.size],v.mode))
+                            {
+                                insert = false;
+                            }
+                            if (!WordPoint::checkChar(source[i],v.mode))
+                            {
+                                insert = false;
+                            }
+                            if (insert)
+                            {
+                                ps.emplace_back(    i - v.size,
+                                                    v.state,
+                                                    v.id,
+                                                    v.size,
+                                                    v.scoped);
+                            }
                         }
                     }
                     if (tmp == nullptr) //erase match
@@ -87,16 +89,19 @@ namespace NULLSCR
         }
         for (int j=0; j<static_cast<int>(matches.size()); ++j)
         {
-            WordPoint* v = matches[j] -> value.get();
-            if (v != nullptr)
+            std::vector<WordPoint>* s = matches[j] -> value.get();
+            if (s != nullptr)
             {
-                if (source.size() -1 - v->size < 0 || WordPoint::checkChar(source[source.size() -1 - v->size],v -> mode))
+                for (auto v:*s)
                 {
-                    ps.emplace_back(    source.size() - v -> size,
-                                                    v -> state,
-                                                    v -> id,
-                                                    v -> size,
-                                                    v -> scoped);
+                    if (source.size() -1 - v.size < 0 || WordPoint::checkChar(source[source.size() -1 - v.size],v.mode))
+                    {
+                        ps.emplace_back(    source.size() - v.size,
+                                                        v.state,
+                                                        v.id,
+                                                        v.size,
+                                                        v.scoped);
+                    }
                 }
             }
         }
@@ -164,7 +169,11 @@ namespace NULLSCR
             }
         }
         if (current != nullptr)
-            current -> value.reset(new WordPoint(value));
+        {
+            if (!(current -> value))
+                current -> value.reset(new std::vector<WordPoint>());
+            current -> value -> push_back(value);
+        }
     }
 
     const LexicalRule::WordsTrieNode& LexicalRule::WordsTrie::getRoot() const
@@ -211,19 +220,22 @@ namespace NULLSCR
                                         {
                                             UnscopedBlock* sbp = sb.get();
                                             sbp -> end = points[j].pos;
-                                            if (stack_list.size()) // push to back of stack
+                                            if (points[j].state != States::silentpop)
                                             {
-                                                std::unique_ptr<Token> tmpu = std::move(create(src -> str.substr(sbp -> start,sbp -> end - sbp -> start + points[j].size),points[j].id,points[j].pos+src -> getPos()));
-                                                if (tmpu)
-                                                    stack_list.back() -> token -> forceAs<ScopeToken>().tokens.emplace_back(std::move(tmpu),points[j].id);
-                                            }
-                                            else // push to source
-                                            {
-                                                std::unique_ptr<Token> tmpu = std::move(create(src -> str.substr(sbp -> start,sbp -> end - sbp -> start + points[j].size),points[j].id,points[j].pos+src -> getPos()));
-                                                if (tmpu)
+                                                if (stack_list.size()) // push to back of stack
                                                 {
-                                                    ++inserted;
-                                                    source.emplace(source.begin()+i+inserted,std::move(tmpu),points[j].id);
+                                                    std::unique_ptr<Token> tmpu = std::move(create(src -> str.substr(sbp -> start,sbp -> end - sbp -> start + points[j].size),points[j].id,points[j].pos+src -> getPos()));
+                                                    if (tmpu)
+                                                        stack_list.back() -> token -> forceAs<ScopeToken>().tokens.emplace_back(std::move(tmpu),points[j].id);
+                                                }
+                                                else // push to source
+                                                {
+                                                    std::unique_ptr<Token> tmpu = std::move(create(src -> str.substr(sbp -> start,sbp -> end - sbp -> start + points[j].size),points[j].id,points[j].pos+src -> getPos()));
+                                                    if (tmpu)
+                                                    {
+                                                        ++inserted;
+                                                        source.emplace(source.begin()+i+inserted,std::move(tmpu),points[j].id);
+                                                    }
                                                 }
                                             }
                                             sb.release();

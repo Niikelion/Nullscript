@@ -30,3 +30,9 @@
 *.exe
 *.out
 *.app
+
+# Project Files
+*.sln
+*.cbp
+*.depend
+*.layout

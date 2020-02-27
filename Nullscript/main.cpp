@@ -9,136 +9,135 @@
 using namespace std;
 using namespace NULLSCR;
 
-class KeywordToken: public StringToken
+class VariableToken: public TokenBase<VariableToken>
 {
 public:
-    virtual char const* getName() const override
+    char const* getName() const override
     {
-        return "keyword";
+        return "variable";
     }
-    virtual std::type_index getType() const override
+    string type;
+    string name;
+
+    VariableToken(const string& _type,const string& _name)
     {
-        return typeid(KeywordToken);
+        type = _type;
+        name = _name;
     }
-    KeywordToken(unsigned pos,const std::string& s): StringToken(pos,s) {};
-    KeywordToken(const KeywordToken&) = default;
-    KeywordToken(KeywordToken&&) noexcept = default;
 };
-class CommentToken: public NULLSCR::StringToken
-{
-public:
-    virtual std::unique_ptr<Token> clone() const override
-    {
-        return std::unique_ptr<CommentToken>(new CommentToken(*this));
-    }
-    virtual std::type_index getType() const override
-    {
-        return typeid(CommentToken);
-    }
-    using StringToken::StringToken;
-};
-
-class SemicolonToken: public TokenBase<SemicolonToken> {};
-
-std::string offset(unsigned off)
-{
-    return std::string(off*2,' ');
-}
-
-void displayTokens(const std::vector<TokenEntity>& tokens,unsigned off = 0)
-{
-    for (const auto& i: tokens)
-    {
-        cout << offset(off) << i.type << endl;
-        std::type_index t = i.token -> getType();
-        if (t == typeid(KeywordToken))
-        {
-            cout << offset(off) << "Keyword token: " << i.token -> forceAs<KeywordToken>().str << endl;
-        }
-        else if (t == typeid(CommentToken))
-        {
-            cout << offset(off) << "Comment token: " << i.token -> forceAs<CommentToken>().str << endl;
-        }
-        else if (t == typeid(SemicolonToken))
-        {
-            cout << offset(off) << "Semicolon token" << endl;
-        }
-        else if (t == typeid(StringToken))
-        {
-            cout << offset(off) << "Raw token: " << i.token -> forceAs<StringToken>().str << endl;
-        }
-        else
-        {
-            cout << "Unknown token: " << t.name() << endl;
-        }
-    }
-}
-
 
 enum Ids
 {
     None = 0,
-    Keyword,
-    Wee
+    Uniform,
+    Type,
+    Scope,
+    Variable,
+    Block,
+    Semicolon
 };
 
-std::unique_ptr<Token> creator(const std::string& source,unsigned id)
+const char* types[] = {
+    "bool","int","uint","float","double",
+
+    "bvec2","ivec2","uvec2","vec2","dvec2",
+
+    "bvec3","ivec3","uvec3","vec3","dvec3",
+
+    "bvec4","ivec4","uvec4","vec4","dvec4",
+
+    "mat2","dmat2","mat2x2","dmat2x2",
+
+    "mat3","dmat3","mat3x3","dmat3x3",
+
+    "mat4","dmat4","mat4x4","dmat4x4",
+
+    "mat2x3","dmat2x3","mat3x2","dmat3x2",
+
+    "mat2x4","dmat2x4","mat4x2","dmat4x2",
+
+    "mat3x4","dmat3x4","mat4x3","dmat4x3"
+};
+
+void setupLex(Stage& st)
 {
-    switch (id)
-    {
-    case Ids::Keyword:
-        {
-            return std::unique_ptr<Token>(new KeywordToken(0,source));
-            break;
-        }
-    }
-    return std::move(std::unique_ptr<Token>(new StringToken(0,source)));
+    LexicalRule *rl = new LexicalRule();
+    st.rules.push_back(std::unique_ptr<Rule>(rl));
+
+    rl->addParsePoint(std::regex("\\s"),Ids::None,LexicalRule::States::forget,false);
+    rl->addParsePoint("#",Ids::None,LexicalRule::Modes::String,LexicalRule::States::push,false);
+    rl->addParsePoint("\n",Ids::None,LexicalRule::Modes::String,LexicalRule::States::silentpop,false);
+
+    rl->addParsePoint(";",Ids::Semicolon,LexicalRule::Modes::String,LexicalRule::States::insert,false);
+
+    rl->addParsePoint("{",Ids::Scope,LexicalRule::Modes::String,LexicalRule::States::push,true);
+    rl->addParsePoint("}",Ids::Scope,LexicalRule::Modes::String,LexicalRule::States::pop,true);
+
+    rl->addParsePoint("uniform",Ids::Uniform,LexicalRule::Modes::String,LexicalRule::States::insert,false);
+    for (auto i:types)
+        rl->addParsePoint(i,Ids::Type,LexicalRule::Modes::String,LexicalRule::States::insert,false);
+
+    rl->setTokenCreator([](const string& source,unsigned type){
+                            switch (type)
+                            {
+                            case Ids::Scope:
+                                {
+                                    return std::unique_ptr<Token>(new ScopeToken(0));
+                                    break;
+                                }
+                            }
+                            return std::unique_ptr<Token>(new StringToken(0,source));
+                        });
 }
 
-std::unique_ptr<Token> mergerFunc(unsigned b,unsigned e,unsigned t,const std::vector<TokenEntity>& tokens)
+void setupMrg(Stage& st)
 {
-    return std::move(std::unique_ptr<Token>(new StringToken(tokens[b].token -> getPos(),"uwu")));
+    LayeredMergingRule *mrg = new LayeredMergingRule();
+    st.rules.push_back(std::unique_ptr<Rule>(mrg));
+    mrg->deep = true;
+    mrg->layers.push_back(MergingLayer());
+    mrg->layers[0].addTypePath({Ids::Type,Ids::None,Ids::Semicolon},Ids::Variable);
+
+    mrg->setTokenMerger([](unsigned b,unsigned e,unsigned t,const std::vector<TokenEntity>& source)
+                        {
+                            switch (t)
+                            {
+                                case Ids::Variable:
+                                {
+                                    return std::unique_ptr<Token>(new VariableToken(source[b].token->forceAs<StringToken>().str,
+                                                                                    source[b+1].token->forceAs<StringToken>().str));
+                                }
+                            }
+                            return std::unique_ptr<Token>(new StringToken(0,""));
+                        });
 }
 
-void setup1(Stage* stg)
+void setup(Tokenizer& t)
 {
-    LexicalRule* lr = new LexicalRule();
+    t.addStage("lex");
+    t.addStage("mrg");
 
-    lr -> addParsePoint("key",Ids::Keyword,LexicalRule::Modes::String,LexicalRule::States::insert,false);
-    lr -> addParsePoint("lelkey",0,LexicalRule::Modes::String,LexicalRule::States::forget,false);
-    lr -> setTokenCreator(creator);
-
-    stg -> rules.emplace_back(lr);
-}
-
-void setup2(Stage* mrg)
-{
-    LayeredMergingRule* lmr = new LayeredMergingRule();
-
-    //lmr -> deep = true;
-    lmr -> layers.emplace_back();
-    lmr -> layers[0].addTypePath({Ids::Keyword,Ids::Keyword},Ids::Wee);
-    lmr -> setTokenMerger(mergerFunc);
-
-    mrg -> rules.emplace_back(lmr);
+    setupLex(t.getStage("lex"));
+    setupMrg(t.getStage("mrg"));
 }
 
 int main()
 {
-    string source = R"TXT(testkeykeyhehkeykeykeylelkeykey)TXT";
+    Tokenizer t;
+    setup(t);
 
-    cout << source << endl;
+    string a;
+    string l;
+    getline(cin,l);
+    a = l;
+    while (!cin.eof() && l.length() > 0)
+    {
+        getline(cin,l);
+        a +='\n' + l;
+    }
 
-    Tokenizer interpreter;
-    interpreter.addStage("1");
-    interpreter.addStage("2");
-
-    setup1(interpreter.findStage("1"));
-    setup2(interpreter.findStage("2"));
-
-    vector<TokenEntity> tokens = std::move(interpreter.tokenize(source));
-
-    displayTokens(tokens);
+    auto v = t.tokenize(a);
+    printTokens(v,cout,true,0);
 
     return 0;
 }

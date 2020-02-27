@@ -34,7 +34,7 @@ namespace NULLSCR
         {
             std::unique_ptr<WordsTrieNode> nodes[128];
             unsigned refs;
-            std::unique_ptr<WordPoint> value;
+            std::unique_ptr<std::vector<WordPoint>> value;
 
             WordsTrieNode* step(char c) const;
             void add(WordsTrieNode* node,char c);

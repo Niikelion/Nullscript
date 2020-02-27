@@ -4,6 +4,8 @@
 #include <string>
 #include <vector>
 #include <memory>
+#include <map>
+#include <set>
 #include <exception>
 #include <typeindex>
 
@@ -94,6 +96,70 @@ namespace NULLSCR
 
         std::vector<TokenEntity> tokenize(const std::string& source) const;
     };
+
+    namespace Interpreter
+    {
+        namespace Actions
+        {
+            enum ACTIONS
+            {
+                None = 0,
+                PushState = 1,
+                PopState = 2,
+                ComplexAction = 4
+            };
+        }
+
+        template<typename T> class ScopedTrieNode
+        {
+        private:
+            std::map<T,ScopedTrieNode<T>*> nodes;
+        public:
+            unsigned action;
+
+            ScopedTrieNode<T>* at(T t)
+            {
+                return nodes.at(t);
+            }
+            void set(T t,ScopedTrieNode<T>* node)
+            {
+                nodes[t] = node;
+            }
+            void remove(T t);
+        };
+        template<typename T> class ScopedTrie
+        {
+        private:
+            std::set<ScopedTrieNode<T>*> nodes;
+            ScopedTrieNode<T> root;
+        public:
+            ScopedTrieNode<T>* getRoot();
+
+            ScopedTrieNode<T>* addPath(const std::vector<T>& path);
+            ScopedTrieNode<T>* appendPath(ScopedTrieNode<T>* origin,const std::vector<T>& path);
+        };
+
+        class Frame
+        {
+        public:
+            //
+        };
+
+        template<typename T> class State
+        {
+        public:
+            ScopedTrie<T>* parsingScopePaths;
+            Frame frame;
+        };
+
+        template<typename T> class Interpreter
+        {
+        private:
+            std::map<std::string,ScopedTrie<T>> scopes;
+        public:
+            //
+        };
+    }
 }
 
 #endif // NULLSCRIPT_H
