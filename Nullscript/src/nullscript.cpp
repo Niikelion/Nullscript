@@ -1,5 +1,5 @@
-#include "nullscript.h"
-#include "tokens.h"
+#include "nullscript/nullscript.h"
+#include "nullscript/tokens.h"
 
 namespace NULLSCR
 {
